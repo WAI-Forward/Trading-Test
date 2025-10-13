@@ -1,4 +1,5 @@
-from src.app.main import app
+from src.app import app
+
 
 @app.route("/")
 def index() -> tuple[dict[str, str], int]:
