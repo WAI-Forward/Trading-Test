@@ -7,6 +7,7 @@ app = Flask(__name__)
 
 # Import route modules to ensure their handlers are registered with the Flask app.
 from src.app.routes import index as _index  # noqa: E402,F401
+from src.app.routes import login as _login  # noqa: E402,F401
 from src.app.routes import redirect as _redirect  # noqa: E402,F401
 
 
