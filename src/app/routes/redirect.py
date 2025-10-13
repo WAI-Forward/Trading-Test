@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from flask import request
 
+from src.app import app
 from src.app.credentials import load_ctrader_credentials
-from src.app.main import app
 
 
 @app.route("/redirect", methods=["GET"])

@@ -5,8 +5,8 @@ from urllib.parse import urlencode
 
 from flask import Response, redirect, request, url_for
 
+from src.app import app
 from src.app.credentials import load_ctrader_credentials
-from src.app.main import app
 
 
 _CTRADER_AUTHORIZE_URL = "https://connect.spotware.com/apps/authorize"
