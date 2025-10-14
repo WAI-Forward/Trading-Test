@@ -139,6 +139,29 @@
         color: rgba(226, 232, 240, 0.8);
       }
 
+      .flash-message {
+        margin: 0 0 1.5rem 0;
+        padding: 0.85rem 1.2rem;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        font-weight: 500;
+        background-color: rgba(59, 130, 246, 0.15);
+        color: #bfdbfe;
+        border: 1px solid rgba(59, 130, 246, 0.35);
+      }
+
+      .flash-message.flash-error {
+        background-color: rgba(248, 113, 113, 0.18);
+        border-color: rgba(248, 113, 113, 0.35);
+        color: #fecaca;
+      }
+
+      .flash-message.flash-success {
+        background-color: rgba(74, 222, 128, 0.18);
+        border-color: rgba(74, 222, 128, 0.35);
+        color: #bbf7d0;
+      }
+
       .help-text {
         margin-top: 1.8rem;
         font-size: 0.85rem;
@@ -173,6 +196,8 @@
         <button type="button" class="primary" id="loginButton">Sign in with cTrader</button>
       </div>
 
+      <p id="flashMessage" class="flash-message" role="status" hidden></p>
+
       <section class="status-panel" aria-live="polite">
         <div class="status-row">
           <span class="status-label">Access Token</span>
@@ -203,6 +228,28 @@
         const tokenDetail = document.querySelector("#tokenDetail");
         const expiryStatus = document.querySelector("#expiryStatus");
         const expiryDetail = document.querySelector("#expiryDetail");
+        const flashMessage = document.querySelector("#flashMessage");
+
+        function showFlash(message, tone = "info") {
+          if (!flashMessage) {
+            return;
+          }
+
+          flashMessage.classList.remove("flash-error", "flash-success");
+
+          if (message) {
+            if (tone === "error") {
+              flashMessage.classList.add("flash-error");
+            } else if (tone === "success") {
+              flashMessage.classList.add("flash-success");
+            }
+
+            flashMessage.textContent = message;
+            flashMessage.hidden = false;
+          } else {
+            flashMessage.hidden = true;
+          }
+        }
 
         function setStatus(element, detailElement, state, summary, detail) {
           element.classList.remove("status-valid", "status-invalid", "status-expiring-soon");
@@ -283,6 +330,49 @@
               "Token expiry could not be determined."
             );
           }
+        }
+
+        const currentUrl = new URL(window.location.href);
+        const params = currentUrl.searchParams;
+        let updatedFromRedirect = false;
+
+        if (params.has(TOKEN_STORAGE_KEY)) {
+          const incomingToken = params.get(TOKEN_STORAGE_KEY) ?? "";
+
+          if (incomingToken) {
+            localStorage.setItem(TOKEN_STORAGE_KEY, incomingToken);
+          } else {
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
+          }
+
+          updatedFromRedirect = true;
+        }
+
+        if (params.has(EXPIRY_STORAGE_KEY)) {
+          const incomingExpiry = params.get(EXPIRY_STORAGE_KEY) ?? "";
+
+          if (incomingExpiry) {
+            localStorage.setItem(EXPIRY_STORAGE_KEY, incomingExpiry);
+          } else {
+            localStorage.removeItem(EXPIRY_STORAGE_KEY);
+          }
+
+          updatedFromRedirect = true;
+        }
+
+        const errorMessage = params.get("error");
+
+        if (errorMessage) {
+          showFlash(errorMessage, "error");
+        } else if (updatedFromRedirect) {
+          showFlash("Access token stored for this browser.", "success");
+        } else {
+          showFlash(null);
+        }
+
+        if ([TOKEN_STORAGE_KEY, EXPIRY_STORAGE_KEY, "error", "state"].some((key) => params.has(key))) {
+          currentUrl.search = "";
+          window.history.replaceState({}, document.title, currentUrl.toString());
         }
 
         loginButton?.addEventListener("click", () => {
