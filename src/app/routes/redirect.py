@@ -11,6 +11,10 @@ from flask import Request, Response, redirect, request, url_for
 
 from src.app import app
 from src.app.credentials import load_ctrader_credentials
+from src.app.services.ctrader_accounts import (
+    CTraderAccountError,
+    fetch_trading_accounts,
+)
 
 # NOTE:
 # Historically the token endpoint lived under ``/connect/oauth/token``.  Spotware
@@ -21,7 +25,9 @@ from src.app.credentials import load_ctrader_credentials
 _DEFAULT_TOKEN_URL = "https://connect.spotware.com/apps/token"
 _TOKEN_STORAGE_KEY = "ctrader_access_token"
 _EXPIRY_STORAGE_KEY = "ctrader_access_token_expires_at"
+_ACCOUNT_STORAGE_KEY = "ctrader_account_id"
 _TOKEN_REQUEST_TIMEOUT = 10.0
+_ACCOUNT_REQUEST_TIMEOUT = 10.0
 
 
 class CTraderOAuthError(RuntimeError):
@@ -72,10 +78,21 @@ def ctrader_redirect() -> Response:
     expires_in = token_payload.get("expires_in")
     expires_at = _compute_expiry_timestamp(expires_in)
 
+    account_id: int | None = None
+    account_error: str | None = None
+
+    try:
+        account_id = _fetch_primary_account(access_token)
+    except CTraderOAuthError as exc:
+        account_error = str(exc)
+        account_id = ""
+
     return _redirect_to_index(
         access_token=access_token,
         expires_at=expires_at,
+        account_id=account_id,
         state=state,
+        error=account_error,
     )
 
 
@@ -144,6 +161,7 @@ def _redirect_to_index(
     *,
     access_token: str | None = None,
     expires_at: str | None = None,
+    account_id: int | str | None = None,
     state: str | None = None,
     error: str | None = None,
 ) -> Response:
@@ -156,6 +174,11 @@ def _redirect_to_index(
         params[_EXPIRY_STORAGE_KEY] = expires_at
     elif expires_at is not None:
         params[_EXPIRY_STORAGE_KEY] = ""
+
+    if account_id:
+        params[_ACCOUNT_STORAGE_KEY] = str(account_id)
+    elif account_id is not None:
+        params[_ACCOUNT_STORAGE_KEY] = ""
 
     if state:
         params["state"] = state
@@ -177,3 +200,25 @@ def _format_oauth_error(error: str, description: str | None) -> str:
     if description:
         return f"{error}: {description}"
     return error
+
+
+def _fetch_primary_account(access_token: str) -> int:
+    try:
+        accounts = fetch_trading_accounts(
+            access_token=access_token,
+            base_url=app.config.get("CTRADER_REST_BASE_URL"),
+            request_timeout=app.config.get(
+                "CTRADER_ACCOUNT_TIMEOUT", _ACCOUNT_REQUEST_TIMEOUT
+            ),
+        )
+    except (ValueError, CTraderAccountError) as exc:
+        raise CTraderOAuthError(
+            "Access token retrieved but trading account lookup failed: {0}".format(exc)
+        ) from exc
+
+    if not accounts:
+        raise CTraderOAuthError(
+            "Access token retrieved but no trading accounts were returned."
+        )
+
+    return accounts[0].ctid_trader_account_id
