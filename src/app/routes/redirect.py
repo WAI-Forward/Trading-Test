@@ -12,7 +12,13 @@ from flask import Request, Response, redirect, request, url_for
 from src.app import app
 from src.app.credentials import load_ctrader_credentials
 
-_DEFAULT_TOKEN_URL = "https://api.spotware.com/connect/oauth/token"
+# NOTE:
+# Historically the token endpoint lived under ``/connect/oauth/token``.  Spotware
+# have since consolidated the OAuth flows under ``https://connect.spotware.com``
+# which serves ``/apps/token`` for exchanging authorisation codes.  The old URL
+# now returns ``404`` which in turn bubbled up to the UI as a fatal error.  Using
+# the documented endpoint keeps both sandbox and live environments working.
+_DEFAULT_TOKEN_URL = "https://connect.spotware.com/apps/token"
 _TOKEN_STORAGE_KEY = "ctrader_access_token"
 _EXPIRY_STORAGE_KEY = "ctrader_access_token_expires_at"
 _TOKEN_REQUEST_TIMEOUT = 10.0
@@ -91,8 +97,12 @@ def _exchange_authorisation_code(
         "client_secret": credentials["secret"],
     }
 
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
     try:
-        response = requests.post(token_url, data=form_data, timeout=timeout)
+        response = requests.post(
+            token_url, data=form_data, headers=headers, timeout=timeout
+        )
     except requests.RequestException as exc:  # pragma: no cover - network failure
         raise CTraderOAuthError("Unable to contact cTrader token endpoint.") from exc
 
