@@ -55,6 +55,12 @@
         margin-bottom: 2rem;
       }
 
+      .auth-controls {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+
       button.primary {
         appearance: none;
         border: none;
@@ -75,6 +81,30 @@
       }
 
       button.primary:active {
+        transform: translateY(0);
+      }
+
+      button.secondary {
+        appearance: none;
+        border-radius: 999px;
+        padding: 0.8rem 1.6rem;
+        font-size: 1rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: #e2e8f0;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+      }
+
+      button.secondary:hover {
+        transform: translateY(-2px);
+        border-color: rgba(148, 163, 184, 0.7);
+        box-shadow: 0 12px 30px rgba(148, 163, 184, 0.25);
+      }
+
+      button.secondary:active {
         transform: translateY(0);
       }
 
@@ -353,7 +383,10 @@
       </p>
 
       <div class="actions">
-        <button type="button" class="primary" id="loginButton">Sign in with cTrader</button>
+        <div class="auth-controls">
+          <button type="button" class="primary" id="loginButton">Sign in with cTrader</button>
+          <button type="button" class="secondary" id="logoutButton">Sign out</button>
+        </div>
         <form class="ticker-form" id="tickerForm" autocomplete="off">
           <label class="ticker-label" for="tickerInput">Stream OHLC</label>
           <div class="ticker-controls">
@@ -379,6 +412,11 @@
           <span class="status-label">Access Token</span>
           <span id="tokenStatus" class="status-indicator status-invalid">Token missing</span>
           <span id="tokenDetail" class="status-detail">No access token found in local storage.</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">Trading Account</span>
+          <span id="accountStatus" class="status-indicator status-invalid">Account missing</span>
+          <span id="accountDetail" class="status-detail">No trading account stored for this browser.</span>
         </div>
         <div class="status-row">
           <span class="status-label">Expiry</span>
@@ -426,8 +464,10 @@
         const LOGIN_ENDPOINT = "/login";
         const TOKEN_STORAGE_KEY = "ctrader_access_token";
         const EXPIRY_STORAGE_KEY = "ctrader_access_token_expires_at";
+        const ACCOUNT_STORAGE_KEY = "ctrader_account_id";
 
         const loginButton = document.querySelector("#loginButton");
+        const logoutButton = document.querySelector("#logoutButton");
         const tickerForm = document.querySelector("#tickerForm");
         const tickerInput = document.querySelector("#tickerInput");
         const streamStatus = document.querySelector("#streamStatus");
@@ -435,10 +475,13 @@
         const ohlcTableBody = document.querySelector("#ohlcTableBody");
         const tokenStatus = document.querySelector("#tokenStatus");
         const tokenDetail = document.querySelector("#tokenDetail");
+        const accountStatus = document.querySelector("#accountStatus");
+        const accountDetail = document.querySelector("#accountDetail");
         const expiryStatus = document.querySelector("#expiryStatus");
         const expiryDetail = document.querySelector("#expiryDetail");
         const flashMessage = document.querySelector("#flashMessage");
         let activeStream;
+        const defaultStreamMeta = streamMeta?.textContent ?? "";
 
         function showFlash(message, tone = "info") {
           if (!flashMessage) {
@@ -462,6 +505,10 @@
         }
 
         function setStatus(element, detailElement, state, summary, detail) {
+          if (!element || !detailElement) {
+            return;
+          }
+
           element.classList.remove("status-valid", "status-invalid", "status-expiring-soon");
           element.classList.add(state);
           element.textContent = summary;
@@ -602,7 +649,7 @@
             return;
           }
 
-          const accountId = localStorage.getItem("ctrader_account_id")?.trim();
+          const accountId = localStorage.getItem(ACCOUNT_STORAGE_KEY)?.trim();
           if (!accountId) {
             showFlash(
               "Missing 'ctrader_account_id' in localStorage. Set it to your cTrader account id.",
@@ -716,6 +763,27 @@
             );
           }
 
+          const accountRaw = localStorage.getItem(ACCOUNT_STORAGE_KEY);
+          const trimmedAccount = accountRaw ? accountRaw.trim() : "";
+
+          if (trimmedAccount) {
+            setStatus(
+              accountStatus,
+              accountDetail,
+              "status-valid",
+              "Account stored",
+              `Using trader account ${trimmedAccount}.`
+            );
+          } else {
+            setStatus(
+              accountStatus,
+              accountDetail,
+              "status-invalid",
+              "Account missing",
+              "No trading account stored for this browser."
+            );
+          }
+
           const expiryRaw = localStorage.getItem(EXPIRY_STORAGE_KEY);
           if (expiryRaw) {
             const parsed = new Date(expiryRaw);
@@ -760,6 +828,18 @@
           updatedFromRedirect = true;
         }
 
+        if (params.has(ACCOUNT_STORAGE_KEY)) {
+          const incomingAccount = params.get(ACCOUNT_STORAGE_KEY) ?? "";
+
+          if (incomingAccount) {
+            localStorage.setItem(ACCOUNT_STORAGE_KEY, incomingAccount);
+          } else {
+            localStorage.removeItem(ACCOUNT_STORAGE_KEY);
+          }
+
+          updatedFromRedirect = true;
+        }
+
         const errorMessage = params.get("error");
 
         if (errorMessage) {
@@ -770,13 +850,27 @@
           showFlash(null);
         }
 
-        if ([TOKEN_STORAGE_KEY, EXPIRY_STORAGE_KEY, "error", "state"].some((key) => params.has(key))) {
+        if ([TOKEN_STORAGE_KEY, EXPIRY_STORAGE_KEY, ACCOUNT_STORAGE_KEY, "error", "state"].some((key) => params.has(key))) {
           currentUrl.search = "";
           window.history.replaceState({}, document.title, currentUrl.toString());
         }
 
         loginButton?.addEventListener("click", () => {
           window.location.assign(LOGIN_ENDPOINT);
+        });
+
+        logoutButton?.addEventListener("click", () => {
+          localStorage.removeItem(TOKEN_STORAGE_KEY);
+          localStorage.removeItem(EXPIRY_STORAGE_KEY);
+          localStorage.removeItem(ACCOUNT_STORAGE_KEY);
+          closeActiveStream("idle");
+          resetStreamTable();
+          if (streamMeta) {
+            streamMeta.textContent = defaultStreamMeta;
+          }
+
+          showFlash("Signed out of cTrader on this device.", "success");
+          refreshIndicators();
         });
 
         tickerForm?.addEventListener("submit", (event) => {
@@ -786,7 +880,12 @@
         });
 
         window.addEventListener("storage", (event) => {
-          if (event.key === TOKEN_STORAGE_KEY || event.key === EXPIRY_STORAGE_KEY || event.key === null) {
+          if (
+            event.key === null ||
+            event.key === TOKEN_STORAGE_KEY ||
+            event.key === EXPIRY_STORAGE_KEY ||
+            event.key === ACCOUNT_STORAGE_KEY
+          ) {
             refreshIndicators();
           }
         });
