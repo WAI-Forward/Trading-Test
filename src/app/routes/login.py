@@ -1,47 +1,40 @@
-"""Route for initiating the cTrader OAuth login flow."""
+"""Route for initiating the cTrader OAuth login flow (SDK-based)."""
 from __future__ import annotations
 
-from urllib.parse import urlencode
-
-from flask import Response, redirect, request, url_for
-
+import json
+from flask import Response, redirect, url_for
 from src.app import app
-from src.app.credentials import load_ctrader_credentials
+
+# Official Spotware SDK
+from ctrader_open_api import Auth, EndPoints
+
+CREDENTIALS_PATH = r"C:\Users\44771\PycharmProjects\Trading test\data\ctrader.json"
 
 
-_CTRADER_AUTHORIZE_URL = "https://connect.spotware.com/oauth2/authorize"
-# _CTRADER_AUTHORIZE_URL = "https://sandbox-connect.spotware.com/oauth2/authorize"
+def load_ctrader_credentials() -> dict[str, str]:
+    with open(CREDENTIALS_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 @app.route("/login", methods=["GET"])
 def ctrader_login() -> Response:
-    """Redirect the user to the cTrader OAuth consent screen.
-
-    Optional ``scope`` and ``state`` query parameters provided to the login
-    endpoint are forwarded to cTrader so integrators can request specific
-    permissions and maintain request state.
-    """
-
-    credentials = load_ctrader_credentials()
+    """Redirect the user to the cTrader OAuth consent screen using the SDK."""
+    creds = load_ctrader_credentials()
     redirect_uri = url_for("ctrader_redirect", _external=True)
 
-    query_params: dict[str, str] = {
-        "response_type": "code",
-        "client_id": credentials["client_id"],
-        "redirect_uri": redirect_uri,
-    }
+    # Initialize Auth helper (uses production by default)
+    auth = Auth(creds["client_id"], creds["secret"], redirect_uri)
 
-    scope = request.args.get("scope")
-    if scope:
-        query_params["scope"] = scope
+    # You can choose environment:
+    #   - Production: EndPoints.AUTH_URI  (default)
+    #   - Sandbox: EndPoints.SANDBOX_AUTH_URI
+    # Uncomment this line if your app is still sandbox-only:
+    # base_uri = EndPoints.SANDBOX_AUTH_URI
+    # auth_url = auth.getAuthUri(baseUri=base_uri)
+    # Otherwise:
+    auth_url = auth.getAuthUri(scope="trading")
 
-    state = request.args.get("state")
-    if state:
-        query_params["state"] = state
+    print("=== Redirecting to authorization URL ===")
+    print(auth_url)
 
-    authorize_url = f"{_CTRADER_AUTHORIZE_URL}?{urlencode(query_params)}"
-
-    print('Sending to authorization url:')
-    print(authorize_url)
-
-    return redirect(authorize_url)
+    return redirect(auth_url)
