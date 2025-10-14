@@ -27,7 +27,7 @@
         border: 1px solid rgba(148, 163, 184, 0.3);
         border-radius: 18px;
         padding: 2.5rem 3rem;
-        width: min(720px, 90vw);
+        width: min(820px, 92vw);
         box-shadow: 0 25px 60px rgba(15, 23, 42, 0.5);
         backdrop-filter: blur(12px);
       }
@@ -49,9 +49,9 @@
 
       .actions {
         display: flex;
-        gap: 1rem;
+        gap: 1.5rem;
         flex-wrap: wrap;
-        align-items: center;
+        align-items: flex-end;
         margin-bottom: 2rem;
       }
 
@@ -76,6 +76,42 @@
 
       button.primary:active {
         transform: translateY(0);
+      }
+
+      .ticker-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        min-width: clamp(240px, 40vw, 360px);
+      }
+
+      .ticker-label {
+        font-size: 0.8rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(148, 163, 184, 0.8);
+      }
+
+      .ticker-controls {
+        display: flex;
+        gap: 0.75rem;
+      }
+
+      .ticker-input {
+        flex: 1 1 auto;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.75);
+        color: inherit;
+        padding: 0.75rem 1.1rem;
+        font-size: 1rem;
+        outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .ticker-input:focus {
+        border-color: rgba(56, 189, 248, 0.8);
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
       }
 
       section.status-panel {
@@ -162,6 +198,104 @@
         color: #bbf7d0;
       }
 
+      .ohlc-panel {
+        margin-top: 2.5rem;
+        background: rgba(15, 23, 42, 0.6);
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+      }
+
+      .ohlc-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .ohlc-header h2 {
+        margin: 0;
+        font-size: 1.1rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(148, 163, 184, 0.85);
+      }
+
+      .stream-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 6.5rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .stream-status-idle {
+        background: rgba(148, 163, 184, 0.15);
+        color: rgba(148, 163, 184, 0.85);
+      }
+
+      .stream-status-connecting {
+        background: rgba(59, 130, 246, 0.15);
+        color: #60a5fa;
+      }
+
+      .stream-status-active {
+        background: rgba(34, 197, 94, 0.18);
+        color: #4ade80;
+      }
+
+      .stream-status-complete {
+        background: rgba(45, 212, 191, 0.18);
+        color: #5eead4;
+      }
+
+      .stream-status-error {
+        background: rgba(248, 113, 113, 0.18);
+        color: #fca5a5;
+      }
+
+      .stream-meta {
+        margin: 0;
+        font-size: 0.95rem;
+        color: rgba(226, 232, 240, 0.85);
+      }
+
+      .table-wrapper {
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        overflow: hidden;
+      }
+
+      .ohlc-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+        background: rgba(15, 23, 42, 0.75);
+      }
+
+      .ohlc-table th,
+      .ohlc-table td {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+      }
+
+      .ohlc-table tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      .ohlc-table tbody tr:nth-child(odd) {
+        background: rgba(30, 41, 59, 0.55);
+      }
+
       .help-text {
         margin-top: 1.8rem;
         font-size: 0.85rem;
@@ -179,8 +313,34 @@
           padding: 2rem 1.6rem;
         }
 
+        .actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .ticker-form {
+          width: 100%;
+        }
+
+        .ticker-controls {
+          flex-direction: column;
+        }
+
+        .ticker-controls button {
+          width: 100%;
+        }
+
         section.status-panel {
           padding: 1.25rem;
+        }
+
+        .ohlc-panel {
+          padding: 1.25rem;
+        }
+
+        .ohlc-table th,
+        .ohlc-table td {
+          padding: 0.65rem 0.75rem;
         }
       }
     </style>
@@ -194,6 +354,22 @@
 
       <div class="actions">
         <button type="button" class="primary" id="loginButton">Sign in with cTrader</button>
+        <form class="ticker-form" id="tickerForm" autocomplete="off">
+          <label class="ticker-label" for="tickerInput">Stream OHLC</label>
+          <div class="ticker-controls">
+            <input
+              id="tickerInput"
+              class="ticker-input"
+              name="ticker"
+              type="text"
+              spellcheck="false"
+              placeholder="Enter ticker (e.g. EURUSD)"
+              aria-label="Ticker symbol"
+              required
+            />
+            <button type="submit" class="primary" id="streamButton">Go</button>
+          </div>
+        </form>
       </div>
 
       <p id="flashMessage" class="flash-message" role="status" hidden></p>
@@ -211,9 +387,37 @@
         </div>
       </section>
 
+      <section class="ohlc-panel" aria-live="polite" aria-busy="false">
+        <div class="ohlc-header">
+          <h2>OHLC Stream</h2>
+          <span id="streamStatus" class="stream-status stream-status-idle">Idle</span>
+        </div>
+        <p id="streamMeta" class="stream-meta">
+          Provide a ticker symbol and click <strong>Go</strong> to stream the latest OHLC candles from cTrader.
+        </p>
+        <div class="table-wrapper">
+          <table class="ohlc-table" aria-live="polite">
+            <thead>
+              <tr>
+                <th scope="col">Timestamp</th>
+                <th scope="col">Open</th>
+                <th scope="col">High</th>
+                <th scope="col">Low</th>
+                <th scope="col">Close</th>
+                <th scope="col">Volume</th>
+              </tr>
+            </thead>
+            <tbody id="ohlcTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
       <p class="help-text">
-        The indicators above read from <code>localStorage</code> keys named <code>ctrader_access_token</code> and <code>ctrader_access_token_expires_at</code>.
-        Update those values after completing the OAuth flow to reflect the latest access token status.
+        The indicators above read from <code>localStorage</code> keys named <code>ctrader_access_token</code> and
+        <code>ctrader_access_token_expires_at</code>. Update those values after completing the OAuth flow to reflect the latest
+        access token status. The OHLC streamer also expects a <code>ctrader_account_id</code> key containing your numeric
+        <code>ctidTraderAccountId</code>. Optionally, you can adjust the <code>ctrader_ohlc_timeframe</code> and
+        <code>ctrader_ohlc_limit</code> keys to customise requests.
       </p>
     </main>
 
@@ -224,11 +428,17 @@
         const EXPIRY_STORAGE_KEY = "ctrader_access_token_expires_at";
 
         const loginButton = document.querySelector("#loginButton");
+        const tickerForm = document.querySelector("#tickerForm");
+        const tickerInput = document.querySelector("#tickerInput");
+        const streamStatus = document.querySelector("#streamStatus");
+        const streamMeta = document.querySelector("#streamMeta");
+        const ohlcTableBody = document.querySelector("#ohlcTableBody");
         const tokenStatus = document.querySelector("#tokenStatus");
         const tokenDetail = document.querySelector("#tokenDetail");
         const expiryStatus = document.querySelector("#expiryStatus");
         const expiryDetail = document.querySelector("#expiryDetail");
         const flashMessage = document.querySelector("#flashMessage");
+        let activeStream;
 
         function showFlash(message, tone = "info") {
           if (!flashMessage) {
@@ -291,6 +501,196 @@
             state: "status-valid",
             summary: "Active",
             detail: `Token valid until ${dateValue.toLocaleString()}.`,
+          };
+        }
+
+        function updateStreamStatus(state, summary) {
+          if (!streamStatus) {
+            return;
+          }
+
+          const statusClasses = [
+            "stream-status-idle",
+            "stream-status-connecting",
+            "stream-status-active",
+            "stream-status-complete",
+            "stream-status-error",
+          ];
+
+          streamStatus.classList.remove(...statusClasses);
+          streamStatus.classList.add(state);
+          streamStatus.textContent = summary;
+        }
+
+        function resetStreamTable() {
+          if (ohlcTableBody) {
+            ohlcTableBody.innerHTML = "";
+          }
+        }
+
+        function appendStreamRow(bar) {
+          if (!ohlcTableBody) {
+            return;
+          }
+
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${bar.timestamp ?? ""}</td>
+            <td>${formatNumber(bar.open)}</td>
+            <td>${formatNumber(bar.high)}</td>
+            <td>${formatNumber(bar.low)}</td>
+            <td>${formatNumber(bar.close)}</td>
+            <td>${bar.volume != null ? formatNumber(bar.volume) : "—"}</td>
+          `;
+
+          if (ohlcTableBody.firstChild) {
+            ohlcTableBody.insertBefore(row, ohlcTableBody.firstChild);
+          } else {
+            ohlcTableBody.appendChild(row);
+          }
+        }
+
+        function formatNumber(value) {
+          if (typeof value !== "number" || Number.isNaN(value)) {
+            return "—";
+          }
+
+          return new Intl.NumberFormat(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 5,
+          }).format(value);
+        }
+
+        function parseEventData(event) {
+          try {
+            return JSON.parse(event.data);
+          } catch (error) {
+            console.error("Unable to parse event data", error);
+            return null;
+          }
+        }
+
+        function closeActiveStream(nextState) {
+          if (activeStream) {
+            activeStream.close();
+            activeStream = undefined;
+          }
+
+          if (!nextState) {
+            return;
+          }
+
+          if (nextState === "idle") {
+            updateStreamStatus("stream-status-idle", "Idle");
+          } else if (nextState === "error") {
+            updateStreamStatus("stream-status-error", "Error");
+          }
+        }
+
+        function startStream(ticker) {
+          const trimmedTicker = ticker.trim().toUpperCase();
+
+          if (!trimmedTicker) {
+            showFlash("Please provide a ticker symbol before streaming.", "error");
+            tickerInput?.focus();
+            return;
+          }
+
+          const accessToken = localStorage.getItem(TOKEN_STORAGE_KEY)?.trim();
+          if (!accessToken) {
+            showFlash("No access token found. Sign in with cTrader first.", "error");
+            return;
+          }
+
+          const accountId = localStorage.getItem("ctrader_account_id")?.trim();
+          if (!accountId) {
+            showFlash(
+              "Missing 'ctrader_account_id' in localStorage. Set it to your cTrader account id.",
+              "error",
+            );
+            return;
+          }
+
+          const timeframe = localStorage.getItem("ctrader_ohlc_timeframe")?.trim() || "M1";
+          const limit = localStorage.getItem("ctrader_ohlc_limit")?.trim() || "100";
+
+          const params = new URLSearchParams({
+            access_token: accessToken,
+            account_id: accountId,
+            timeframe,
+            limit,
+          });
+
+          const url = `/ohlc-stream/${encodeURIComponent(trimmedTicker)}?${params.toString()}`;
+
+          closeActiveStream("idle");
+          resetStreamTable();
+
+          updateStreamStatus("stream-status-connecting", "Connecting…");
+          showFlash(null);
+          if (streamMeta) {
+            streamMeta.textContent = `Requesting ${timeframe} candles for ${trimmedTicker}…`;
+          }
+
+          const eventSource = new EventSource(url);
+          activeStream = eventSource;
+
+          eventSource.addEventListener("meta", (event) => {
+            const data = parseEventData(event);
+            if (!data) {
+              return;
+            }
+
+            resetStreamTable();
+            updateStreamStatus("stream-status-active", "Streaming");
+            if (streamMeta) {
+              streamMeta.textContent = `Streaming ${data.count} candle(s) for ${data.ticker} (${data.timeframe}).`;
+            }
+          });
+
+          eventSource.addEventListener("bar", (event) => {
+            const data = parseEventData(event);
+            if (!data) {
+              return;
+            }
+
+            appendStreamRow(data);
+          });
+
+          eventSource.addEventListener("complete", (event) => {
+            const data = parseEventData(event);
+            updateStreamStatus("stream-status-complete", "Complete");
+
+            if (data && streamMeta) {
+              streamMeta.textContent = `Received ${data.count} candle(s) for ${data.ticker}.`;
+            }
+
+            showFlash("OHLC stream completed successfully.", "success");
+            closeActiveStream();
+          });
+
+          eventSource.addEventListener("error", (event) => {
+            const data = parseEventData(event);
+            if (data?.message) {
+              showFlash(data.message, "error");
+            } else {
+              showFlash("Stream closed due to an unexpected error.", "error");
+            }
+
+            if (streamMeta) {
+              streamMeta.textContent = "Unable to stream OHLC data. Adjust the inputs and try again.";
+            }
+
+            closeActiveStream("error");
+          });
+
+          eventSource.onerror = () => {
+            showFlash("Lost connection to OHLC stream.", "error");
+            if (streamMeta) {
+              streamMeta.textContent = "The stream disconnected. Please try again.";
+            }
+
+            closeActiveStream("error");
           };
         }
 
@@ -379,6 +779,12 @@
           window.location.assign(LOGIN_ENDPOINT);
         });
 
+        tickerForm?.addEventListener("submit", (event) => {
+          event.preventDefault();
+          const value = tickerInput?.value ?? "";
+          startStream(value);
+        });
+
         window.addEventListener("storage", (event) => {
           if (event.key === TOKEN_STORAGE_KEY || event.key === EXPIRY_STORAGE_KEY || event.key === null) {
             refreshIndicators();
@@ -389,6 +795,10 @@
           if (!document.hidden) {
             refreshIndicators();
           }
+        });
+
+        window.addEventListener("beforeunload", () => {
+          closeActiveStream("idle");
         });
 
         refreshIndicators();
