@@ -19,6 +19,7 @@ def _register_routes() -> None:
 
     from src.app.routes import index as _index  # noqa: F401
     from src.app.routes import login as _login  # noqa: F401
+    from src.app.routes import ohlc as _ohlc  # noqa: F401
     from src.app.routes import redirect as _redirect  # noqa: F401
 
 
