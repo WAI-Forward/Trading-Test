@@ -5,8 +5,6 @@ import datetime as _dt
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, MutableMapping
 
-import requests
-
 __all__ = [
     "CTraderMarketDataError",
     "OHLCBar",
@@ -200,6 +198,8 @@ def _call_ctrader_endpoint(
     *,
     timeout: float,
 ) -> MutableMapping[str, Any]:
+    import requests
+
     url = _join_url(base_url, endpoint)
 
     headers = {

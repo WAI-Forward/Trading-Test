@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trading Test · Dashboard</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.5;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        background: radial-gradient(circle at top, #0f172a, #020617);
+        color: #f8fafc;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      main {
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        border-radius: 18px;
+        padding: 2.5rem 3rem;
+        width: min(720px, 90vw);
+        box-shadow: 0 25px 60px rgba(15, 23, 42, 0.5);
+        backdrop-filter: blur(12px);
+      }
+
+      h1 {
+        margin-top: 0;
+        font-size: clamp(1.75rem, 3vw, 2.5rem);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #38bdf8;
+      }
+
+      p.subtitle {
+        margin-top: 0.3rem;
+        margin-bottom: 2.2rem;
+        color: rgba(226, 232, 240, 0.8);
+        font-size: 1rem;
+      }
+
+      .actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 2rem;
+      }
+
+      button.primary {
+        appearance: none;
+        border: none;
+        border-radius: 999px;
+        padding: 0.85rem 1.8rem;
+        font-size: 1rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: #0f172a;
+        background: linear-gradient(135deg, #38bdf8, #22d3ee);
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      button.primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 30px rgba(34, 211, 238, 0.35);
+      }
+
+      button.primary:active {
+        transform: translateY(0);
+      }
+
+      section.status-panel {
+        background: rgba(15, 23, 42, 0.6);
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        padding: 1.5rem;
+        display: grid;
+        gap: 1rem;
+      }
+
+      .status-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .status-label {
+        font-size: 0.85rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(148, 163, 184, 0.75);
+      }
+
+      .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 1rem;
+        font-weight: 600;
+        padding: 0.55rem 1rem;
+        border-radius: 999px;
+        transition: background-color 0.2s ease, color 0.2s ease;
+      }
+
+      .status-indicator::before {
+        content: "";
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 50%;
+        background-color: currentColor;
+      }
+
+      .status-valid {
+        color: #4ade80;
+        background-color: rgba(74, 222, 128, 0.15);
+      }
+
+      .status-expiring-soon {
+        color: #facc15;
+        background-color: rgba(250, 204, 21, 0.15);
+      }
+
+      .status-invalid {
+        color: #f87171;
+        background-color: rgba(248, 113, 113, 0.15);
+      }
+
+      .status-detail {
+        font-size: 0.9rem;
+        color: rgba(226, 232, 240, 0.8);
+      }
+
+      .help-text {
+        margin-top: 1.8rem;
+        font-size: 0.85rem;
+        color: rgba(148, 163, 184, 0.75);
+      }
+
+      code {
+        background: rgba(15, 23, 42, 0.7);
+        padding: 0.25rem 0.45rem;
+        border-radius: 6px;
+      }
+
+      @media (max-width: 640px) {
+        main {
+          padding: 2rem 1.6rem;
+        }
+
+        section.status-panel {
+          padding: 1.25rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Trading Test Control Centre</h1>
+      <p class="subtitle">
+        Launch the cTrader OAuth flow and monitor whether an access token is available on this device.
+      </p>
+
+      <div class="actions">
+        <button type="button" class="primary" id="loginButton">Sign in with cTrader</button>
+      </div>
+
+      <section class="status-panel" aria-live="polite">
+        <div class="status-row">
+          <span class="status-label">Access Token</span>
+          <span id="tokenStatus" class="status-indicator status-invalid">Token missing</span>
+          <span id="tokenDetail" class="status-detail">No access token found in local storage.</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">Expiry</span>
+          <span id="expiryStatus" class="status-indicator status-invalid">Unknown</span>
+          <span id="expiryDetail" class="status-detail">Token expiry could not be determined.</span>
+        </div>
+      </section>
+
+      <p class="help-text">
+        The indicators above read from <code>localStorage</code> keys named <code>ctrader_access_token</code> and <code>ctrader_access_token_expires_at</code>.
+        Update those values after completing the OAuth flow to reflect the latest access token status.
+      </p>
+    </main>
+
+    <script>
+      (function () {
+        const LOGIN_ENDPOINT = "/login";
+        const TOKEN_STORAGE_KEY = "ctrader_access_token";
+        const EXPIRY_STORAGE_KEY = "ctrader_access_token_expires_at";
+
+        const loginButton = document.querySelector("#loginButton");
+        const tokenStatus = document.querySelector("#tokenStatus");
+        const tokenDetail = document.querySelector("#tokenDetail");
+        const expiryStatus = document.querySelector("#expiryStatus");
+        const expiryDetail = document.querySelector("#expiryDetail");
+
+        function setStatus(element, detailElement, state, summary, detail) {
+          element.classList.remove("status-valid", "status-invalid", "status-expiring-soon");
+          element.classList.add(state);
+          element.textContent = summary;
+          detailElement.textContent = detail;
+        }
+
+        function describeExpiry(dateValue) {
+          const now = new Date();
+          if (!(dateValue instanceof Date) || Number.isNaN(dateValue.valueOf())) {
+            return { state: "status-invalid", summary: "Unknown", detail: "Token expiry could not be determined." };
+          }
+
+          const diffMs = dateValue - now;
+
+          if (diffMs <= 0) {
+            const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+            const minutes = Math.round(diffMs / 60000);
+            return {
+              state: "status-invalid",
+              summary: "Expired",
+              detail: `Token expired ${formatter.format(minutes, "minute")}.`,
+            };
+          }
+
+          const hoursRemaining = diffMs / 3600000;
+          const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+
+          if (hoursRemaining <= 1) {
+            return {
+              state: "status-expiring-soon",
+              summary: "Expiring soon",
+              detail: `Token will expire ${formatter.format(Math.round(diffMs / 60000), "minute")}.`,
+            };
+          }
+
+          return {
+            state: "status-valid",
+            summary: "Active",
+            detail: `Token valid until ${dateValue.toLocaleString()}.`,
+          };
+        }
+
+        function refreshIndicators() {
+          const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+          const trimmedToken = storedToken ? storedToken.trim() : "";
+
+          if (trimmedToken) {
+            setStatus(
+              tokenStatus,
+              tokenDetail,
+              "status-valid",
+              "Token stored",
+              `Access token present (${trimmedToken.length} characters).`
+            );
+          } else {
+            setStatus(
+              tokenStatus,
+              tokenDetail,
+              "status-invalid",
+              "Token missing",
+              "No access token found in local storage."
+            );
+          }
+
+          const expiryRaw = localStorage.getItem(EXPIRY_STORAGE_KEY);
+          if (expiryRaw) {
+            const parsed = new Date(expiryRaw);
+            const { state, summary, detail } = describeExpiry(parsed);
+            setStatus(expiryStatus, expiryDetail, state, summary, detail);
+          } else {
+            setStatus(
+              expiryStatus,
+              expiryDetail,
+              "status-invalid",
+              "Unknown",
+              "Token expiry could not be determined."
+            );
+          }
+        }
+
+        loginButton?.addEventListener("click", () => {
+          window.location.assign(LOGIN_ENDPOINT);
+        });
+
+        window.addEventListener("storage", (event) => {
+          if (event.key === TOKEN_STORAGE_KEY || event.key === EXPIRY_STORAGE_KEY || event.key === null) {
+            refreshIndicators();
+          }
+        });
+
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) {
+            refreshIndicators();
+          }
+        });
+
+        refreshIndicators();
+      })();
+    </script>
+  </body>
+</html>
