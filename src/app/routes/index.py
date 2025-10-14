@@ -1,7 +1,12 @@
+"""Routes for the root landing page of the Trading-Test application."""
+from __future__ import annotations
+
+from flask import render_template
+
 from src.app import app
 
 
 @app.route("/")
-def index() -> tuple[dict[str, str], int]:
-    """Return a JSON greeting for the root endpoint."""
-    return {"message": "Welcome to the Trading-Test Flask app!"}, 200
+def index() -> str:
+    """Render the HTML dashboard for launching authentication flows."""
+    return render_template("index.html")

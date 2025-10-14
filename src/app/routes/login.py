@@ -3,10 +3,8 @@ from __future__ import annotations
 
 import json
 from flask import Response, redirect, url_for
-from src.app import app
 
-# Official Spotware SDK
-from ctrader_open_api import Auth, EndPoints
+from src.app import app
 
 CREDENTIALS_PATH = r"C:\Users\44771\PycharmProjects\Trading test\data\ctrader.json"
 
@@ -19,6 +17,8 @@ def load_ctrader_credentials() -> dict[str, str]:
 @app.route("/login", methods=["GET"])
 def ctrader_login() -> Response:
     """Redirect the user to the cTrader OAuth consent screen using the SDK."""
+    from ctrader_open_api import Auth, EndPoints
+
     creds = load_ctrader_credentials()
     redirect_uri = url_for("ctrader_redirect", _external=True)
 
