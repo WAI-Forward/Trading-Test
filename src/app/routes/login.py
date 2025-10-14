@@ -9,7 +9,8 @@ from src.app import app
 from src.app.credentials import load_ctrader_credentials
 
 
-_CTRADER_AUTHORIZE_URL = "https://connect.spotware.com/apps/authorize"
+_CTRADER_AUTHORIZE_URL = "https://connect.spotware.com/oauth2/authorize"
+# _CTRADER_AUTHORIZE_URL = "https://sandbox-connect.spotware.com/oauth2/authorize"
 
 
 @app.route("/login", methods=["GET"])
@@ -39,5 +40,8 @@ def ctrader_login() -> Response:
         query_params["state"] = state
 
     authorize_url = f"{_CTRADER_AUTHORIZE_URL}?{urlencode(query_params)}"
+
+    print('Sending to authorization url:')
+    print(authorize_url)
 
     return redirect(authorize_url)
