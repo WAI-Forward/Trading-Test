@@ -25,7 +25,7 @@ from src.app.services.ctrader_accounts import (
 _DEFAULT_TOKEN_URL = "https://connect.spotware.com/apps/token"
 _TOKEN_STORAGE_KEY = "ctrader_access_token"
 _EXPIRY_STORAGE_KEY = "ctrader_access_token_expires_at"
-_ACCOUNT_STORAGE_KEY = "ctrader_account_id"
+_ACCOUNT_STORAGE_KEY = "ctidTraderAccountId"
 _TOKEN_REQUEST_TIMEOUT = 10.0
 _ACCOUNT_REQUEST_TIMEOUT = 10.0
 
