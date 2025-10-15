@@ -1,14 +1,14 @@
-"""Helpers for retrieving trading account information from cTrader."""
+# src/app/services/ctrader_accounts.py v6 (final)
+"""Helpers for retrieving trading account information from cTrader (REST-compatible)."""
+
 from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, MutableMapping
-
+from typing import Any, Mapping
 import requests
 
 __all__ = ["CTraderAccountError", "TraderAccount", "fetch_trading_accounts"]
 
-_DEFAULT_REST_BASE_URL = "https://api.spotware.com/connect/openapi/trading/v3"
+_DEFAULT_REST_BASE_URL = "https://api.spotware.com/connect"
 _DEFAULT_TIMEOUT = 10.0
 
 
@@ -16,14 +16,15 @@ class CTraderAccountError(RuntimeError):
     """Raised when the cTrader API returns an error for account lookups."""
 
 
-@dataclass(slots=True)
+@dataclass
 class TraderAccount:
     """Minimal representation of a cTrader trading account."""
-
     ctid_trader_account_id: int
     trader_login: str | None = None
     account_type: str | None = None
     currency: str | None = None
+    broker_name: str | None = None
+    live: bool | None = None
 
 
 def fetch_trading_accounts(
@@ -32,145 +33,81 @@ def fetch_trading_accounts(
     base_url: str | None = None,
     request_timeout: float = _DEFAULT_TIMEOUT,
 ) -> list[TraderAccount]:
-    """Return the trading accounts associated with the OAuth ``access_token``.
-
-    Args:
-        access_token: OAuth access token obtained from the cTrader login flow.
-        base_url: Optional override of the REST base URL.
-        request_timeout: Timeout in seconds for the upstream HTTP request.
-
-    Returns:
-        A list of :class:`TraderAccount` objects ordered as provided by cTrader.
-
-    Raises:
-        ValueError: If ``access_token`` is empty.
-        CTraderAccountError: If the upstream request fails or the payload is
-            malformed.
-    """
-
+    """Return the trading accounts associated with the given OAuth access token."""
     if not access_token:
         raise ValueError("An OAuth access token is required to query cTrader.")
 
     api_base_url = base_url or _DEFAULT_REST_BASE_URL
-
-    payload = _call_ctrader_endpoint(
-        api_base_url,
-        "GetTradingAccounts",
-        {},
-        access_token,
-        timeout=request_timeout,
-    )
-
-    raw_accounts = _extract_account_list(payload)
-    accounts: list[TraderAccount] = []
-
-    for raw_account in raw_accounts:
-        accounts.append(_build_trader_account(raw_account))
-
-    return accounts
-
-
-def _call_ctrader_endpoint(
-    base_url: str,
-    endpoint: str,
-    payload: Mapping[str, object],
-    access_token: str,
-    *,
-    timeout: float,
-) -> MutableMapping[str, Any]:
-    url = _join_url(base_url, endpoint)
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-    }
+    url = f"{api_base_url.rstrip('/')}/tradingaccounts"
+    params = {"oauth_token": access_token}
 
     try:
-        response = requests.post(url, json=dict(payload), headers=headers, timeout=timeout)
-    except requests.RequestException as exc:  # pragma: no cover - network failure
+        response = requests.get(url, params=params, timeout=request_timeout)
+    except requests.RequestException as exc:
         raise CTraderAccountError("Unable to contact the cTrader trading accounts endpoint.") from exc
 
-    try:
-        response.raise_for_status()
-    except requests.HTTPError as exc:  # pragma: no cover - requires live HTTP call
+    if response.status_code >= 400:
         raise CTraderAccountError(
-            "cTrader API call to '{0}' failed with status {1}: {2}".format(
-                endpoint, response.status_code, response.text
-            )
-        ) from exc
-
-    try:
-        parsed = response.json()
-    except ValueError as exc:  # pragma: no cover - requires invalid remote response
-        raise CTraderAccountError(
-            "Unable to parse JSON response from cTrader endpoint '{0}'.".format(endpoint)
-        ) from exc
-
-    if isinstance(parsed, Mapping) and "error" in parsed:
-        error_payload = parsed.get("error")
-        raise CTraderAccountError(
-            "cTrader returned an error for '{0}': {1}".format(endpoint, error_payload)
+            f"cTrader API call failed with status {response.status_code}: {response.text}"
         )
 
-    if not isinstance(parsed, MutableMapping):
-        raise CTraderAccountError(
-            "Unexpected payload structure returned by cTrader endpoint '{0}'.".format(endpoint)
-        )
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise CTraderAccountError("Unable to parse JSON response from cTrader.") from exc
 
-    return parsed
+    raw_accounts = _extract_account_list(data)
+    return [_build_trader_account(a) for a in raw_accounts]
 
 
-def _extract_account_list(payload: Mapping[str, Any]) -> Iterable[Mapping[str, Any]]:
-    for key in ("accounts", "tradingAccounts", "traderAccounts", "traderAccountList"):
+def _extract_account_list(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """Locate and return the list of accounts from the payload."""
+    if not isinstance(payload, Mapping):
+        raise CTraderAccountError("Unexpected response structure from cTrader.")
+
+    for key in ("data", "accounts", "tradingAccounts", "traderAccounts", "traderAccountList"):
         candidate = payload.get(key)
-        if isinstance(candidate, Iterable) and not isinstance(candidate, (str, bytes)):
+        if isinstance(candidate, list):
             return candidate
+
+    if isinstance(payload, list):
+        return payload
 
     raise CTraderAccountError("cTrader response did not include any trading accounts.")
 
 
-def _build_trader_account(raw_account: Mapping[str, Any]) -> TraderAccount:
-    try:
-        account_id = int(raw_account["ctidTraderAccountId"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise CTraderAccountError(
-            "cTrader account payload missing required 'ctidTraderAccountId'."
-        ) from exc
+def _build_trader_account(raw: Mapping[str, Any]) -> TraderAccount:
+    """Convert a raw API account object into a TraderAccount."""
+    account_id = raw.get("accountId") or raw.get("ctidTraderAccountId")
+    if account_id is None:
+        raise CTraderAccountError("cTrader account payload missing required 'accountId' field.")
 
-    trader_login = _optional_str(
-        raw_account.get("traderLogin") or raw_account.get("login")
-    )
-    account_type = _optional_str(
-        raw_account.get("accountType") or raw_account.get("type")
-    )
-    currency = _optional_str(
-        raw_account.get("accountCurrency")
-        or raw_account.get("depositCurrency")
-        or raw_account.get("currency")
-    )
+    try:
+        account_id = int(account_id)
+    except (TypeError, ValueError) as exc:
+        raise CTraderAccountError(f"Invalid accountId in cTrader payload: {account_id}") from exc
+
+    trader_login = _optional_str(raw.get("accountNumber") or raw.get("login"))
+    account_type = _optional_str(raw.get("traderAccountType") or raw.get("accountType"))
+    currency = _optional_str(raw.get("depositCurrency") or raw.get("currency"))
+    broker_name = _optional_str(raw.get("brokerName"))
+    live = raw.get("live", None)
 
     return TraderAccount(
         ctid_trader_account_id=account_id,
         trader_login=trader_login,
         account_type=account_type,
         currency=currency,
+        broker_name=broker_name,
+        live=live,
     )
-
-
-def _join_url(base_url: str, endpoint: str) -> str:
-    trimmed_base = base_url.rstrip("/")
-    trimmed_endpoint = endpoint.lstrip("/")
-    return f"{trimmed_base}/{trimmed_endpoint}"
 
 
 def _optional_str(value: Any) -> str | None:
     if value is None:
         return None
-
     try:
-        text = str(value)
-    except Exception:  # pragma: no cover - defensive programming
+        text = str(value).strip()
+        return text or None
+    except Exception:
         return None
-
-    return text if text else None
-
