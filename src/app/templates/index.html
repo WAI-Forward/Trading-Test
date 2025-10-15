@@ -453,7 +453,7 @@
       <p class="help-text">
         The indicators above read from <code>localStorage</code> keys named <code>ctrader_access_token</code> and
         <code>ctrader_access_token_expires_at</code>. Update those values after completing the OAuth flow to reflect the latest
-        access token status. The OHLC streamer also expects a <code>ctrader_account_id</code> key containing your numeric
+        access token status. The OHLC streamer also expects a <code>ctidTraderAccountId</code> key containing your numeric
         <code>ctidTraderAccountId</code>. Optionally, you can adjust the <code>ctrader_ohlc_timeframe</code> and
         <code>ctrader_ohlc_limit</code> keys to customise requests.
       </p>
@@ -464,7 +464,8 @@
         const LOGIN_ENDPOINT = "/login";
         const TOKEN_STORAGE_KEY = "ctrader_access_token";
         const EXPIRY_STORAGE_KEY = "ctrader_access_token_expires_at";
-        const ACCOUNT_STORAGE_KEY = "ctrader_account_id";
+        const ACCOUNT_STORAGE_KEY = "ctidTraderAccountId";
+        const LEGACY_ACCOUNT_STORAGE_KEY = "ctrader_account_id";
 
         const loginButton = document.querySelector("#loginButton");
         const logoutButton = document.querySelector("#logoutButton");
@@ -652,7 +653,7 @@
           const accountId = localStorage.getItem(ACCOUNT_STORAGE_KEY)?.trim();
           if (!accountId) {
             showFlash(
-              "Missing 'ctrader_account_id' in localStorage. Set it to your cTrader account id.",
+              "Missing 'ctidTraderAccountId' in localStorage. Set it to your cTrader trading account id.",
               "error",
             );
             return;
@@ -803,6 +804,12 @@
         const currentUrl = new URL(window.location.href);
         const params = currentUrl.searchParams;
         let updatedFromRedirect = false;
+
+        const legacyAccountId = localStorage.getItem(LEGACY_ACCOUNT_STORAGE_KEY);
+        if (legacyAccountId && !localStorage.getItem(ACCOUNT_STORAGE_KEY)) {
+          localStorage.setItem(ACCOUNT_STORAGE_KEY, legacyAccountId);
+          localStorage.removeItem(LEGACY_ACCOUNT_STORAGE_KEY);
+        }
 
         if (params.has(TOKEN_STORAGE_KEY)) {
           const incomingToken = params.get(TOKEN_STORAGE_KEY) ?? "";
