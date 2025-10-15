@@ -29,7 +29,7 @@ class CTraderMarketDataError(RuntimeError):
     """Raised when cTrader returns an error for a market-data request."""
 
 
-@dataclass(slots=True)
+@dataclass
 class OHLCBar:
     """Representation of an OHLC (trendbar) datapoint returned by cTrader."""
 
