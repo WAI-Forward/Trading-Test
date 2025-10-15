@@ -60,8 +60,10 @@ def stream_ohlc(ticker: str) -> Response | tuple[Response, int]:
     limit = request.args.get("limit", default=100, type=int)
 
     if access_token is None:
+        print('NO ACCESS TOKEN FOR STREAM')
         return jsonify({"error": "Missing required 'access_token' query parameter."}), 400
     if account_id is None:
+        print('NO ACCOUNT ID FOR STREAM')
         return jsonify({"error": "Missing required 'account_id' query parameter."}), 400
 
     def _event_stream() -> Iterable[str]:
