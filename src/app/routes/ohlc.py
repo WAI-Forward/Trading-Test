@@ -15,6 +15,9 @@ from src.app.services.ctrader_market_data import (
 )
 
 
+_DEFAULT_MARKET_DATA_TIMEOUT = 10.0
+
+
 @app.route("/ohlc/<string:ticker>", methods=["GET"])
 def get_ohlc(ticker: str) -> tuple[Response, int]:
     """Return OHLC candles for ``ticker`` using the cTrader REST API.
@@ -65,16 +68,18 @@ def get_ohlc(ticker: str) -> tuple[Response, int]:
 
     try:
         bars = fetch_ohlc_data(
-            access_token=access_token,
-            ctid_trader_account_id=account_id,
-            symbol_name=ticker,
-            symbol_id=symbol_id,
-            timeframe=timeframe,
-            limit=limit,
-            start_time=start_dt,
-            end_time=end_dt,
-            base_url=base_url,
-            request_timeout=timeout if timeout is not None else 10.0,
+            **_build_fetch_request(
+                access_token=access_token,
+                account_id=account_id,
+                ticker=ticker,
+                symbol_id=symbol_id,
+                timeframe=timeframe,
+                limit=limit,
+                start=start_dt,
+                end=end_dt,
+                base_url=base_url,
+                timeout=timeout,
+            )
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -132,16 +137,18 @@ def stream_ohlc(ticker: str) -> Response | tuple[Response, int]:
     def _event_stream() -> Iterable[str]:
         try:
             bars = fetch_ohlc_data(
-                access_token=access_token,
-                ctid_trader_account_id=account_id,
-                symbol_name=ticker,
-                symbol_id=symbol_id,
-                timeframe=timeframe,
-                limit=limit,
-                start_time=start_dt,
-                end_time=end_dt,
-                base_url=base_url,
-                request_timeout=timeout if timeout is not None else 10.0,
+                **_build_fetch_request(
+                    access_token=access_token,
+                    account_id=account_id,
+                    ticker=ticker,
+                    symbol_id=symbol_id,
+                    timeframe=timeframe,
+                    limit=limit,
+                    start=start_dt,
+                    end=end_dt,
+                    base_url=base_url,
+                    timeout=timeout,
+                )
             )
         except ValueError as exc:
             yield _sse_event("error", {"message": str(exc)})
@@ -191,6 +198,47 @@ def _parse_iso8601(value: str) -> datetime:
         raise ValueError("Timestamps must include a timezone (expected UTC).")
 
     return parsed.astimezone(timezone.utc)
+
+
+def _build_fetch_request(
+    *,
+    access_token: str,
+    account_id: int,
+    ticker: str,
+    symbol_id: int | None,
+    timeframe: str,
+    limit: int,
+    start: datetime | None,
+    end: datetime | None,
+    base_url: str | None,
+    timeout: float | None,
+) -> dict[str, Any]:
+    request_timeout = (
+        timeout if timeout is not None else _DEFAULT_MARKET_DATA_TIMEOUT
+    )
+
+    fetch_kwargs: dict[str, Any] = {
+        "access_token": access_token,
+        "ctid_trader_account_id": account_id,
+        "symbol_name": ticker,
+        "timeframe": timeframe,
+        "limit": limit,
+        "request_timeout": request_timeout,
+    }
+
+    if symbol_id is not None:
+        fetch_kwargs["symbol_id"] = symbol_id
+
+    if start is not None:
+        fetch_kwargs["start_time"] = start
+
+    if end is not None:
+        fetch_kwargs["end_time"] = end
+
+    if base_url:
+        fetch_kwargs["base_url"] = base_url
+
+    return fetch_kwargs
 
 
 def _serialise_bar(bar: OHLCBar) -> dict[str, Any]:
