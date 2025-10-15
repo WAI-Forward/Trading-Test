@@ -1,16 +1,26 @@
-# src/app/services/market_data.py v2 (REST-compatible)
-"""Utilities for retrieving market data from the cTrader Connect REST API."""
+# src/app/services/ctrader_market_data.py v17
+"""Retrieve OHLC data from cTrader Open API using Twisted client (ctrader_open_api 0.9.2, reactor thread-safe)."""
 
 from __future__ import annotations
 import datetime as _dt
+import json
+import threading
+import time
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
-import requests
+from typing import List, Optional
+
+from twisted.internet import reactor
+from ctrader_open_api import Client, TcpProtocol
+from ctrader_open_api.messages.OpenApiMessages_pb2 import (
+    ProtoOAApplicationAuthReq,
+    ProtoOAAccountAuthReq,
+    ProtoOASymbolsListReq,
+    ProtoOAGetTrendbarsReq,
+)
 
 __all__ = ["CTraderMarketDataError", "OHLCBar", "fetch_ohlc_data"]
 
-_DEFAULT_REST_BASE_URL = "https://api.spotware.com/connect"
-_VALID_TIMEFRAMES = {"M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"}
+_CREDENTIALS_PATH = r"C:\Users\44771\PycharmProjects\Trading test\data\ctrader.json"
 
 
 class CTraderMarketDataError(RuntimeError):
@@ -27,6 +37,23 @@ class OHLCBar:
     volume: float | None
 
 
+_TIMEFRAME_MAP = {
+    "M1": 1, "M5": 2, "M15": 3, "M30": 4, "H1": 5, "H4": 6, "D1": 7, "W1": 8, "MN1": 9,
+}
+
+
+def _load_credentials() -> dict[str, str]:
+    with open(_CREDENTIALS_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _start_reactor_in_background():
+    """Start Twisted reactor in a background thread if not already running."""
+    if not reactor.running:
+        threading.Thread(target=reactor.run, kwargs={"installSignalHandlers": False}, daemon=True).start()
+        time.sleep(0.2)
+
+
 def fetch_ohlc_data(
     *,
     access_token: str,
@@ -34,92 +61,92 @@ def fetch_ohlc_data(
     symbol_name: str,
     timeframe: str = "M1",
     limit: int = 100,
-    start_time: _dt.datetime | None = None,
-    end_time: _dt.datetime | None = None,
-    base_url: str | None = None,
-    request_timeout: float = 10.0,
-) -> list[OHLCBar]:
-    """Fetch OHLC candles for ``symbol_name`` via cTrader's REST API."""
-    if not access_token:
-        raise ValueError("An OAuth access token is required to query cTrader.")
-    if timeframe.upper() not in _VALID_TIMEFRAMES:
-        raise ValueError(f"Unsupported timeframe '{timeframe}'.")
-    if limit <= 0:
-        raise ValueError("Limit must be positive.")
-    if limit > 500:
-        limit = 500
+) -> List[OHLCBar]:
+    """Fetch OHLC data synchronously using Twisted-based Client (ctrader_open_api 0.9.2)."""
 
-    api_base_url = base_url or _DEFAULT_REST_BASE_URL
-    url = (
-        f"{api_base_url.rstrip('/')}/public/tradingaccounts/"
-        f"{ctid_trader_account_id}/symbols/{symbol_name}/trendbars"
-    )
+    creds = _load_credentials()
+    # host = "demo.ctraderapi.com"
+    host = "hconnect.ctrader.com"
+    port = 5035  # SSL handled automatically by Client
 
-    params: dict[str, Any] = {
-        "oauth_token": access_token,
-        "period": timeframe.upper(),
-        "num": limit,
-    }
+    _start_reactor_in_background()
 
-    if start_time is not None:
-        params["fromTimestamp"] = _to_epoch_millis(start_time)
-    if end_time is not None:
-        params["toTimestamp"] = _to_epoch_millis(end_time)
+    result: dict[str, Optional[List[OHLCBar]]] = {"bars": None, "error": None}
+    done = threading.Event()
 
-    try:
-        response = requests.get(url, params=params, timeout=request_timeout)
-    except requests.RequestException as exc:
-        raise CTraderMarketDataError("Unable to contact the cTrader OHLC endpoint.") from exc
+    def on_connect(client_inst):
+        print("[cTrader] CONNECTED → sending application auth")
+        req = ProtoOAApplicationAuthReq()
+        req.clientId = creds["client_id"]
+        req.clientSecret = creds["secret"]
+        client_inst.send(req)
 
-    if response.status_code >= 400:
-        raise CTraderMarketDataError(
-            f"cTrader OHLC request failed with {response.status_code}: {response.text}"
-        )
+    def on_message(client_inst, message):
+        pt = message.payloadType
+        if pt == "ProtoOAApplicationAuthRes":
+            print("[cTrader] App authenticated")
+            client_inst.send(ProtoOAAccountAuthReq(ctidTraderAccountId=ctid_trader_account_id))
+        elif pt == "ProtoOAAccountAuthRes":
+            print(f"[cTrader] Account {ctid_trader_account_id} authenticated")
+            client_inst.send(ProtoOASymbolsListReq(ctidTraderAccountId=ctid_trader_account_id))
+        elif pt == "ProtoOASymbolsListRes":
+            found = None
+            for s in message.payload.symbol:
+                if s.symbolName.upper() == symbol_name.upper():
+                    found = s
+                    break
+            if not found:
+                result["error"] = CTraderMarketDataError(f"Symbol '{symbol_name}' not found")
+                done.set()
+                return
+            period = _TIMEFRAME_MAP.get(timeframe.upper())
+            if not period:
+                result["error"] = ValueError(f"Unsupported timeframe '{timeframe}'")
+                done.set()
+                return
+            client_inst.send(
+                ProtoOAGetTrendbarsReq(
+                    ctidTraderAccountId=ctid_trader_account_id,
+                    symbolId=found.symbolId,
+                    period=period,
+                    count=limit,
+                )
+            )
+        elif pt == "ProtoOAGetTrendbarsRes":
+            bars = []
+            for tb in message.payload.trendbar:
+                ts = _dt.datetime.fromtimestamp(tb.utcTimestampInMinutes * 60, tz=_dt.timezone.utc)
+                bars.append(
+                    OHLCBar(
+                        timestamp=ts.isoformat(),
+                        open=tb.open,
+                        high=tb.high,
+                        low=tb.low,
+                        close=tb.close,
+                        volume=tb.volume,
+                    )
+                )
+            result["bars"] = bars
+            done.set()
 
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise CTraderMarketDataError("Unable to parse JSON response from cTrader.") from exc
+    def on_disconnect(client_inst, reason):
+        print(f"[cTrader] DISCONNECTED: {reason}")
 
-    trendbars = _extract_trendbars(payload)
-    return [_build_ohlc_bar(tb) for tb in trendbars]
+    print(f"[cTrader] Connecting securely to {host}:{port}")
+    client = Client(host, port, TcpProtocol)
+    client.setConnectedCallback(on_connect)
+    client.setMessageReceivedCallback(on_message)
+    client.setDisconnectedCallback(on_disconnect)
+    client.startService()
 
+    # Wait for result or timeout
+    done.wait(timeout=25)
 
-def _extract_trendbars(payload: Mapping[str, Any]) -> Iterable[Mapping[str, Any]]:
-    for key in ("data", "trendbars", "trendbarList", "trendbar"):
-        candidate = payload.get(key)
-        if isinstance(candidate, Iterable) and not isinstance(candidate, (str, bytes)):
-            return candidate
-    raise CTraderMarketDataError("cTrader response did not include any trendbars.")
+    client.stopService()
 
+    if result["error"]:
+        raise result["error"]
+    if not result["bars"]:
+        raise CTraderMarketDataError("No trendbars received (timeout)")
 
-def _build_ohlc_bar(raw_bar: Mapping[str, Any]) -> OHLCBar:
-    try:
-        timestamp_ms = int(raw_bar["utcTimestamp"])
-        open_price = float(raw_bar["open"])
-        high_price = float(raw_bar["high"])
-        low_price = float(raw_bar["low"])
-        close_price = float(raw_bar["close"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise CTraderMarketDataError("Invalid trendbar payload.") from exc
-
-    volume = raw_bar.get("volume")
-    volume_value = float(volume) if volume is not None else None
-    timestamp_iso = _dt.datetime.fromtimestamp(
-        timestamp_ms / 1000, tz=_dt.timezone.utc
-    ).isoformat()
-
-    return OHLCBar(
-        timestamp=timestamp_iso,
-        open=open_price,
-        high=high_price,
-        low=low_price,
-        close=close_price,
-        volume=volume_value,
-    )
-
-
-def _to_epoch_millis(dt_value: _dt.datetime) -> int:
-    if dt_value.tzinfo is None:
-        raise ValueError("Datetime must be timezone-aware.")
-    return int(dt_value.timestamp() * 1000)
+    return result["bars"]
