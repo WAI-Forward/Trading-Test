@@ -34,8 +34,8 @@ def get_ohlc(ticker: str) -> tuple[Response, int]:
     try:
         bars = fetch_ohlc_data(
             access_token=access_token,
-            ctid_trader_account_id=account_id,
-            symbol_name=ticker,
+            account_id=account_id,
+            symbol=ticker,
             timeframe=timeframe,
             limit=limit,
         )
